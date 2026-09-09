@@ -1,0 +1,130 @@
+
+クラス設計
+
+＊がクラス
+：が継承
+
+＊メインメニューマネージャ
+
+
+＊キャラクター
+    現在HP
+    最大HP
+    攻撃力
+    魔力
+    防御力
+    素早さ
+
+
+
+＊アクション
+    効果番号、パラメータ
+    例
+        単体攻撃 100(0,0,100)
+        全体攻撃 100(0,1,50)
+        全体回復 200(3,30)
+
+効果番号
+    (例)
+        100:攻撃 パラメータ0(0:物理 1:魔法)パラメータ１(0:敵単体 1:敵全体) パラメータ2(攻撃力/魔力の割合:100なら100%)
+        200:回復 パラメータ0(範囲 0:単体 1:全体 2:自分 3:味方全体)パラメータ１(魔力の割合100なら100%)
+
+＊戦士：キャラクター
+    ＊アクション１
+    ＊アクション２
+
+＊魔法使い：キャラクター
+    ＊アクション１
+    ＊アクション２
+
+＊僧侶：キャラクター
+    ＊アクション１
+    ＊アクション２
+
+＊キャラクター生成マネージャ　乱数シードを受け取り、キャラクターデータを１体生成する
+    乱数シード
+
+＊キャラクター情報表示　１体のキャラクターデータを受け取り、その内容を表示する
+
+＊バトルマネージャ　　バトルログを即座に生成する。
+    乱数シード
+
+＊バトルログマネージャ　バトルマネージャが生成したバトルログを受け取り、その内容を表示する
+    キャラクター生成乱数シード
+    バトル乱数シード
+    バトルログ表示
+
+
+アクションデータは固定で内部に持つ。
+完成後、外部データの読み込み機能を追加する。
+
+
+
+enum class EffectType{
+    Attack      ,//攻撃
+    Heal        ,//回復
+};
+
+enum class ParamType{
+    Physical    ,//物理
+    Magic       ,//魔法
+};
+
+enum class TargetSide{
+    Enemy       ,//敵
+    Friend      ,//味方
+    Self        ,//自身
+};
+
+enum class TargetSelect{
+    LowestHp    ,//Hpが低い
+    Random      ,//ランダム
+};
+
+enum class TargetRange{
+    All         ,//全体
+    One         ,//単体
+};
+
+
+class Action{
+    EffectType mEffectType;
+    ParamType mParamType;
+    TargetSide mTargetSide;
+    TargetSelect mTargetSelect;
+    std::optional<TargetRange> mTargetRange;
+};
+
+class ActionList{
+    std::vector<Action> mList;
+};
+
+enum class ActionId{
+    AttackOne,
+    AttackDouble,
+    MagicAttackOne,
+    MagicAttackAll,
+    HealOne,
+    HealAll,
+};
+
+class CharacterAction{
+    ActionId mId;
+    int mPercent;
+};
+
+
+class Character{
+private:
+    int mHp;
+    int mMaxHp;
+    int mAttack;
+    int mMagic;
+    int mDefence;
+    int mSpeed;
+    std::vector<CharacterAction> mAction;
+public:
+    Character( int maxHp, int attack, int magic, int defence, int speed ):
+        mHp(maxHp),mMaxHp(maxHp),mAttack(attack),mMagic(magic),mDefence(defence),mSpeed(speed);
+};
+
