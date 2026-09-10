@@ -219,6 +219,8 @@ std::array<int, static_cast<int>(CharacterParam::End)> GetDefaultParam(const Cha
     param[static_cast<int>(CharacterParam::Defence)] = 15;
     param[static_cast<int>(CharacterParam::Speed)] = 5;
     break;
+  case CharacterType::End:
+    break;
   }
 
   return param;
@@ -433,6 +435,9 @@ int main()
     std::cout << " " << v;
     ;
   }
+
+  int input=0;
+  std::cin>>input;
 
   std::cout << "\nCharacter Manager\n";
   return 0;
