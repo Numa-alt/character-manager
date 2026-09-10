@@ -427,13 +427,13 @@ int main()
     std::cout << " " << v;
     ;
   }
-  std::cout << "r2\n";
+  std::cout << "\nr2\n";
   for (int &v : a2)
   {
     std::cout << " " << v;
     ;
   }
 
-  std::cout << "Character Manager\n";
+  std::cout << "\nCharacter Manager\n";
   return 0;
 }

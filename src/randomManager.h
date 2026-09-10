@@ -12,7 +12,7 @@ public:
   }
   unsigned int Get()
   {
-    mSeed = (mSeed + ((mSeed >> 1) & 31)) * 17 + ((mSeed >> 2) & 1);
+    mSeed = (mSeed + ((mSeed >> 1) & 31)) * ((mSeed) & 15);
     return mSeed;
   }
   unsigned int GetSeed() const
