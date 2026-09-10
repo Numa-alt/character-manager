@@ -1,6 +1,7 @@
 #include <iostream>
 #include <optional>
 #include <vector>
+#include <array>
 #include <memory>
 #include <utility>
 
@@ -104,51 +105,60 @@ enum class CharacterType
   Healer,  // 回復役
 };
 
+enum class CharacterParam
+{
+  Hp,
+  MaxHp,
+  Attack,
+  Magic,
+  Defence,
+  Speed,
+  End
+};
+
 class Character
 {
 private:
   CharacterType mType;
-  int mHp;
-  int mMaxHp;
-  int mAttack;
-  int mMagic;
-  int mDefence;
-  int mSpeed;
+  std::array<int, static_cast<int>( CharacterParam::End ) >mParam{};
+  // int mHp;
+  // int mMaxHp;
+  // int mAttack;
+  // int mMagic;
+  // int mDefence;
+  // int mSpeed;
   std::vector<CharacterAction> mAction;
 
 public:
   Character(
-      CharacterType type,
-      int maxHp,
-      int attack,
-      int magic,
-      int defence,
-      int speed)
-      : mType(type),
-        mHp(maxHp),
-        mMaxHp(maxHp),
-        mAttack(attack),
-        mMagic(magic),
-        mDefence(defence),
-        mSpeed(speed)
+      CharacterType type )
+      : mType(type)
   {
   }
-  int GetMaxHp() const
+  void SetParam( CharacterParam param, int value )
   {
-    return mMaxHp;
+    mParam[ static_cast<int>(param)] = value;
   }
-  int GetHp() const
+  int GetParam( CharacterParam param ) const
   {
-    return mHp;
+    return mParam[ static_cast<int>(param) ];
   }
-  int GetAttack() const
-  {
-    return mAttack;
-  }
-  int GetMagic() const
-  {
-    return mMagic;
-  }
+  // int GetMaxHp() const
+  // {
+  //   return mMaxHp;
+  // }
+  // int GetHp() const
+  // {
+  //   return mHp;
+  // }
+  // int GetAttack() const
+  // {
+  //   return mAttack;
+  // }
+  // int GetMagic() const
+  // {
+  //   return mMagic;
+  // }
 };
 
 // class MenuItemBase
@@ -185,20 +195,28 @@ public:
 
 std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase)
 {
+  
+  RandomManager rnd(randomBase);
+    
+  //最初に種類を選択
+  CharacterType ct = static_cast<CharacterType>(rnd.Get());
+
+  std::array<int,5> param;
+
   std::unique_ptr<Character> character = std::make_unique<Character>(
-      CharacterType::Warrior,
-      50, // int maxHp,
-      0,  // int attack,
-      0,  // int magic,
-      0,  // int defence,
-      0   // int speed)
+      ct
   );
   return character;
 }
 
 void DisplayCharacter(const Character &c)
 {
-  std::cout << "MaxHp:" << c.GetMaxHp() << "\n";
+  std::cout << "MaxHp:" << c.GetParam(CharacterParam::MaxHp) << "\n";
+}
+
+void DisplayMenu()
+{
+  ;
 }
 
 int main()
@@ -285,6 +303,8 @@ int main()
   std::unique_ptr<ActionTable> actionTableHealAll = std::make_unique<ActionTable>();
   (*actionTableHealAll).AddAction(std::move(actionHealAll));
   actionTable.push_back(std::move(actionTableHealAll));
+
+  
 
   // キャラクター
   RandomManager randCharacter(12345);
