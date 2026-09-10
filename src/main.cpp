@@ -7,6 +7,10 @@
 
 #include "randomManager.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 enum class EffectType
 {
   Attack, // 攻撃
@@ -103,6 +107,7 @@ enum class CharacterType
   Warrior, // 戦士
   Caster,  // 魔法使い
   Healer,  // 回復役
+  End,
 };
 
 enum class CharacterParam
@@ -120,45 +125,36 @@ class Character
 {
 private:
   CharacterType mType;
-  std::array<int, static_cast<int>( CharacterParam::End ) >mParam{};
-  // int mHp;
-  // int mMaxHp;
-  // int mAttack;
-  // int mMagic;
-  // int mDefence;
-  // int mSpeed;
+  std::array<int, static_cast<int>(CharacterParam::End)> mParam{};
   std::vector<CharacterAction> mAction;
+  int mRandomBase;
 
 public:
   Character(
-      CharacterType type )
+      CharacterType type)
       : mType(type)
   {
   }
-  void SetParam( CharacterParam param, int value )
+  CharacterType GetType() const
   {
-    mParam[ static_cast<int>(param)] = value;
+    return mType;
   }
-  int GetParam( CharacterParam param ) const
+  void SetParam(CharacterParam param, int value)
   {
-    return mParam[ static_cast<int>(param) ];
+    mParam[static_cast<int>(param)] = value;
   }
-  // int GetMaxHp() const
-  // {
-  //   return mMaxHp;
-  // }
-  // int GetHp() const
-  // {
-  //   return mHp;
-  // }
-  // int GetAttack() const
-  // {
-  //   return mAttack;
-  // }
-  // int GetMagic() const
-  // {
-  //   return mMagic;
-  // }
+  int GetParam(CharacterParam param) const
+  {
+    return mParam[static_cast<int>(param)];
+  }
+  void SetRandomBase(const int randomBase)
+  {
+    mRandomBase = randomBase;
+  }
+  int GetRadomBase() const
+  {
+    return mRandomBase;
+  }
 };
 
 // class MenuItemBase
@@ -193,25 +189,114 @@ public:
 //     void Exec(){}
 // };
 
+std::array<int, static_cast<int>(CharacterParam::End)> GetDefaultParam(const CharacterType ct)
+{
+  std::array<int, static_cast<int>(CharacterParam::End)> param;
+
+  switch (ct)
+  {
+  case CharacterType::Warrior: // 基礎パラメータ(HP50 攻撃力 30 防御力15 魔力5 素早さ10 )
+    param[static_cast<int>(CharacterParam::MaxHp)] = 50;
+    param[static_cast<int>(CharacterParam::Hp)] = 50;
+    param[static_cast<int>(CharacterParam::Attack)] = 30;
+    param[static_cast<int>(CharacterParam::Magic)] = 5;
+    param[static_cast<int>(CharacterParam::Defence)] = 15;
+    param[static_cast<int>(CharacterParam::Speed)] = 10;
+    break;
+  case CharacterType::Caster: // 基礎パラメータ(HP30 攻撃力 20 防御力10 魔力40 素早さ7 )
+    param[static_cast<int>(CharacterParam::MaxHp)] = 30;
+    param[static_cast<int>(CharacterParam::Hp)] = 30;
+    param[static_cast<int>(CharacterParam::Attack)] = 20;
+    param[static_cast<int>(CharacterParam::Magic)] = 40;
+    param[static_cast<int>(CharacterParam::Defence)] = 10;
+    param[static_cast<int>(CharacterParam::Speed)] = 7;
+    break;
+  case CharacterType::Healer: // 基礎パラメータ基礎パラメータ(HP35 攻撃力 20 防御力15 魔力30 素早さ5 )
+    param[static_cast<int>(CharacterParam::MaxHp)] = 35;
+    param[static_cast<int>(CharacterParam::Hp)] = 35;
+    param[static_cast<int>(CharacterParam::Attack)] = 20;
+    param[static_cast<int>(CharacterParam::Magic)] = 30;
+    param[static_cast<int>(CharacterParam::Defence)] = 15;
+    param[static_cast<int>(CharacterParam::Speed)] = 5;
+    break;
+  }
+
+  return param;
+}
+
 std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase)
 {
-  
+
   RandomManager rnd(randomBase);
-    
-  //最初に種類を選択
-  CharacterType ct = static_cast<CharacterType>(rnd.Get());
 
-  std::array<int,5> param;
+  // 最初に種類を選択
+  const int ict = rnd.Get() % static_cast<int>(CharacterType::End);
+  CharacterType ct = static_cast<CharacterType>(ict);
 
-  std::unique_ptr<Character> character = std::make_unique<Character>(
-      ct
-  );
+  // 種類ごとのデフォルトのパラメータを取得
+  std::array<int, static_cast<int>(CharacterParam::End)> param = GetDefaultParam(ct);
+
+  std::unique_ptr<Character> character = std::make_unique<Character>(ct);
+
+  (character.get())->SetRandomBase(randomBase);
+
+  // デフォルトのパラメータを設定
+  for (int i = 0; i < static_cast<int>(CharacterParam::End); i++)
+  {
+    int v = param[i];
+    (character.get())->SetParam(static_cast<CharacterParam>(i), v);
+  }
+
+  std::cout << "乱数でパラメータを割り振り randumBase " << randomBase << "\n";
+  // 乱数でパラメータを割り振り
+  const int TotalBonusPoints = 100;
+  for (int i = 0; i < TotalBonusPoints; i++)
+  {
+    // CharacterParam::Hpは選ばない。割り振りが終わった後、MaxHpをコピーする
+    const int paramId = 1 + (rnd.Get() % (static_cast<int>(CharacterParam::End) - 1));
+    std::cout << paramId << " ";
+    const int value = (character.get())->GetParam(static_cast<CharacterParam>(paramId));
+    (character.get())->SetParam(static_cast<CharacterParam>(paramId), value + 1);
+  }
+  std::cout << "\n";
+  const int MaxHp = (character.get())->GetParam(CharacterParam::MaxHp);
+  (character.get())->SetParam(CharacterParam::Hp, MaxHp);
+
+  // 差分確認
+  std::cout << "差分確認 ";
+  for (int i = 0; i < static_cast<int>(CharacterParam::End); i++)
+  {
+    int v = (character.get())->GetParam(static_cast<CharacterParam>(i)) - param[i];
+    std::cout << " " << v << " ";
+  }
+  std::cout << "\n";
+
   return character;
 }
 
 void DisplayCharacter(const Character &c)
 {
-  std::cout << "MaxHp:" << c.GetParam(CharacterParam::MaxHp) << "\n";
+  switch (c.GetType())
+  {
+  case CharacterType::Warrior:
+    std::cout << "戦士 ";
+    break;
+  case CharacterType::Caster:
+    std::cout << "魔法使い ";
+    break;
+  case CharacterType::Healer:
+    std::cout << "僧侶 ";
+    break;
+  default:
+    std::cout << "不明なタイプ";
+    break;
+  }
+  std::cout << "Hp:" << c.GetParam(CharacterParam::Hp) << " ";
+  std::cout << "MaxHp:" << c.GetParam(CharacterParam::MaxHp) << " ";
+  std::cout << "Attack:" << c.GetParam(CharacterParam::Attack) << " ";
+  std::cout << "Magic:" << c.GetParam(CharacterParam::Magic) << " ";
+  std::cout << "Defence:" << c.GetParam(CharacterParam::Defence) << " ";
+  std::cout << "Speed:" << c.GetParam(CharacterParam::Speed) << "\n";
 }
 
 void DisplayMenu()
@@ -221,6 +306,10 @@ void DisplayMenu()
 
 int main()
 {
+#ifdef _WIN32
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+#endif
   std::vector<std::unique_ptr<ActionTable>> actionTable;
 
   // 単体攻撃
@@ -304,26 +393,46 @@ int main()
   (*actionTableHealAll).AddAction(std::move(actionHealAll));
   actionTable.push_back(std::move(actionTableHealAll));
 
-  
-
   // キャラクター
-  RandomManager randCharacter(12345);
+  std::cout << "キャラクター生成\n";
   std::vector<std::unique_ptr<Character>> character;
+  unsigned int rnd = 12345;
   for (int i = 0; i < 6; i++)
   {
-    unsigned int rnd = randCharacter.Get();
-    std::cout << rnd << "\n";
-    character.push_back(CreateCharacter(rnd));
+    RandomManager randCharacter(rnd);
+    unsigned int rndSub = randCharacter.Get();
+    character.push_back(CreateCharacter(rndSub));
+    rnd = rnd * rndSub;
   }
-  // std::unique_ptr<Character> c0 = std::make_unique<Character>(
-  //     CharacterType::Warrior,
-  //     50, // int maxHp,
-  //     0,  // int attack,
-  //     0,  // int magic,
-  //     0,  // int defence,
-  //     0   // int speed)
-  // );
-  // character.push_back(std::move(c0));
+  for (const auto &c : character)
+  {
+    DisplayCharacter(*c);
+  }
+
+  std::cout << "乱数テスト\n";
+  RandomManager r(12345);
+  RandomManager r2(12346);
+  std::array<int, 6> a{};
+  std::array<int, 6> a2{};
+
+  for (int i = 0; i < 100000; i++)
+  {
+    unsigned int value = r.Get();
+    a[value % 6]++;
+    unsigned int value2 = r2.Get();
+    a2[value2 % 6]++;
+  }
+  for (int &v : a)
+  {
+    std::cout << " " << v;
+    ;
+  }
+  std::cout << "r2\n";
+  for (int &v : a2)
+  {
+    std::cout << " " << v;
+    ;
+  }
 
   std::cout << "Character Manager\n";
   return 0;

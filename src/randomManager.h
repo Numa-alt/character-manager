@@ -1,22 +1,21 @@
 #pragma once
 
-
-class RandomManager{
+class RandomManager
+{
 private:
   unsigned int mBaseSeed;
   unsigned int mSeed;
-  
-public:
-  RandomManager(unsigned int seed):mBaseSeed(seed),mSeed(seed)
-  {
 
+public:
+  RandomManager(unsigned int seed) : mBaseSeed(seed), mSeed(seed)
+  {
   }
   unsigned int Get()
   {
-    mSeed = ( mSeed + 1 ) * 17;
+    mSeed = (mSeed + ((mSeed >> 1) & 31)) * 17 + ((mSeed >> 2) & 1);
     return mSeed;
   }
-  unsigned int GetSeed()const
+  unsigned int GetSeed() const
   {
     return mBaseSeed;
   }
@@ -25,5 +24,3 @@ public:
     mSeed = mBaseSeed;
   }
 };
-
-

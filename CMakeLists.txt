@@ -11,5 +11,10 @@ endif()
 
 add_executable(character_manager
     src/main.cpp
+
 )
+
+if(MSVC)
+    target_compile_options(character_manager PRIVATE /utf-8)
+endif()
 
