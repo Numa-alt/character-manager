@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <utility>
+#include <algorithm>
 
 #include "randomManager.h"
 
@@ -129,6 +130,7 @@ class Character
 {
 private:
     CharacterType mType;
+    int mTeamNo;
     std::array<int, static_cast<int>(CharacterParam::End)> mParam{};
     std::vector<CharacterAction> mAction;
     int mRandomBase;
@@ -136,7 +138,7 @@ private:
 public:
     Character(
         CharacterType type)
-        : mType(type)
+        : mType(type), mTeamNo(0)
     {
     }
 
@@ -144,6 +146,17 @@ public:
     {
         return mType;
     }
+
+    void SetTeamNo(int teamNo)
+    {
+        mTeamNo = teamNo;
+    }
+
+    int GetTeamNo() const
+    {
+        return mTeamNo;
+    }
+
     void SetParam(CharacterParam param, int value)
     {
         mParam[static_cast<int>(param)] = value;
@@ -202,7 +215,7 @@ std::array<int, static_cast<int>(CharacterParam::End)> GetDefaultParam(const Cha
 
 //--------------------------------------------------------------------------------------------------
 // キャラクター生成
-std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase)
+std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase, const int teamNo)
 {
     RandomManager rnd(randomBase);
 
@@ -214,6 +227,8 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase)
     std::array<int, static_cast<int>(CharacterParam::End)> param = GetDefaultParam(ct);
 
     std::unique_ptr<Character> character = std::make_unique<Character>(ct);
+
+    (character.get())->SetTeamNo(teamNo);
 
     (character.get())->SetRandomBase(randomBase);
 
@@ -265,6 +280,20 @@ void DisplayCharacter(const Character &c)
     std::cout << "Speed:" << c.GetParam(CharacterParam::Speed) << "\n";
 }
 
+// バトルログのデータの種類
+enum class LogType
+{
+    TurnNo, // ターン番号
+    End,    // バトル終了
+};
+
+unsigned int MakeLog(const LogType logType, const unsigned int param)
+{
+    unsigned int value = 0;
+    value = ((static_cast<unsigned int>(logType) & 0xFF) << 24) | (param & 0xFFFFFF);
+    return value;
+}
+
 //--------------------------------------------------------------------------------------------------
 // バトルログの生成
 void CreateBattleLog(std::vector<unsigned int> &log,
@@ -276,10 +305,56 @@ void CreateBattleLog(std::vector<unsigned int> &log,
     // 先頭に乱数を入れる
     log.push_back(randomSeed);
 
-    // for (const auto &c : character)
-    // {
-    //     DisplayCharacter(*c);
-    // }
+    int turnNo = 0;
+    int loopCount = 0;
+    bool exit = false;
+    while (1)
+    {
+        // ターン番号を保存
+        unsigned int v = MakeLog(LogType::TurnNo, turnNo);
+        log.push_back(v);
+        turnNo++;
+
+        std::vector<Character *> list;
+
+        for (const auto &c : character)
+        {
+            list.push_back(c.get());
+        }
+
+        // キャラをシャッフル(速度が同じキャラが複数いた場合に、いつも同じ順番にならないよう)
+
+        // 速度順に並び替え
+        std::sort(
+            list.begin(),
+            list.end(),
+            [](const Character *a, const Character *b)
+            {
+                return a->GetParam(CharacterParam::Speed) > b->GetParam(CharacterParam::Speed);
+            });
+
+        // 速度順に行動を処理
+        for (Character *c : list)
+        {
+            // 行動
+
+            // もしどちらかのチームが全滅しているなら終了
+        }
+
+        loopCount++;
+        if (loopCount >= 100)
+        {
+            exit = true;
+        }
+
+        if (exit)
+        {
+            break;
+        }
+    }
+
+    log.push_back(MakeLog(LogType::End, turnNo));
+
     std::cout << "\n";
 }
 //--------------------------------------------------------------------------------------------------
@@ -379,8 +454,9 @@ int main()
     RandomManager randCharacter(54321);
     for (int i = 0; i < 6; i++)
     {
+        int teamNo = (i < 3) ? 0 : 1;
         unsigned int rndSub = randCharacter.Get();
-        character.push_back(CreateCharacter(rndSub));
+        character.push_back(CreateCharacter(rndSub, teamNo));
     }
     for (const auto &c : character)
     {
@@ -418,8 +494,9 @@ int main()
             RandomManager randCharacter(randomSeed);
             for (int i = 0; i < 6; i++)
             {
+                int teamNo = (i < 3) ? 0 : 1;
                 unsigned int rndSub = randCharacter.Get();
-                character.push_back(CreateCharacter(rndSub));
+                character.push_back(CreateCharacter(rndSub, teamNo));
             }
             for (const auto &c : character)
             {
