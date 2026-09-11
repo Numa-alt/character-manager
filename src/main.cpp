@@ -189,6 +189,8 @@ public:
 //     void Exec(){}
 // };
 
+
+
 std::array<int, static_cast<int>(CharacterParam::End)> GetDefaultParam(const CharacterType ct)
 {
   std::array<int, static_cast<int>(CharacterParam::End)> param;
@@ -226,9 +228,9 @@ std::array<int, static_cast<int>(CharacterParam::End)> GetDefaultParam(const Cha
   return param;
 }
 
+// キャラクター生成
 std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase)
 {
-
   RandomManager rnd(randomBase);
 
   // 最初に種類を選択
@@ -398,13 +400,12 @@ int main()
   // キャラクター
   std::cout << "キャラクター生成\n";
   std::vector<std::unique_ptr<Character>> character;
-  unsigned int rnd = 12345;
+  // unsigned int rnd = 12345;
+  RandomManager randCharacter(54321);
   for (int i = 0; i < 6; i++)
   {
-    RandomManager randCharacter(rnd);
     unsigned int rndSub = randCharacter.Get();
     character.push_back(CreateCharacter(rndSub));
-    rnd = rnd * rndSub;
   }
   for (const auto &c : character)
   {
@@ -436,8 +437,8 @@ int main()
     ;
   }
 
-  int input=0;
-  std::cin>>input;
+  int input = 0;
+  std::cin >> input;
 
   std::cout << "\nCharacter Manager\n";
   return 0;
