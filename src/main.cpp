@@ -102,8 +102,14 @@ enum class ActionId
 
 class CharacterAction
 {
+public:
+    CharacterAction(ActionId id, unsigned int per) : mId(id), mPercent(per)
+    {
+
+    }
+private:
     ActionId mId;
-    int mPercent;
+    unsigned int mPercent;
 };
 
 enum class CharacterType
@@ -140,6 +146,12 @@ public:
         CharacterType type)
         : mType(type), mTeamNo(0)
     {
+    }
+
+    //行動IDとその確率を設定
+    void SetAction( ActionId actionId, unsigned int probability )
+    {
+        mAction.push_back( CharacterAction( actionId, probability ) );
     }
 
     CharacterType GetType() const
@@ -220,13 +232,13 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase, const 
     RandomManager rnd(randomBase);
 
     // 最初に種類を選択
-    const int ict = rnd.Get() % static_cast<int>(CharacterType::End);
-    CharacterType ct = static_cast<CharacterType>(ict);
+    const int characterTypeIndex = rnd.Get() % static_cast<int>(CharacterType::End);
+    CharacterType characterType = static_cast<CharacterType>(characterTypeIndex);
 
     // 種類ごとのデフォルトのパラメータを取得
-    std::array<int, static_cast<int>(CharacterParam::End)> param = GetDefaultParam(ct);
+    std::array<int, static_cast<int>(CharacterParam::End)> param = GetDefaultParam(characterType);
 
-    std::unique_ptr<Character> character = std::make_unique<Character>(ct);
+    std::unique_ptr<Character> character = std::make_unique<Character>(characterType);
 
     (character.get())->SetTeamNo(teamNo);
 
@@ -250,6 +262,30 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase, const 
     }
     const int MaxHp = (character.get())->GetParam(CharacterParam::MaxHp);
     (character.get())->SetParam(CharacterParam::Hp, MaxHp);
+
+    //種類ごとの行動確率を設定する
+    switch( characterType )
+    {
+        case CharacterType::Warrior:
+            (character.get())->SetAction(ActionId::AttackOne,50);
+            (character.get())->SetAction(ActionId::AttackDouble,40);
+            (character.get())->SetAction(ActionId::HealOne,10);
+            break;
+        case CharacterType::Caster:
+            (character.get())->SetAction(ActionId::MagicAttackOne,60);
+            (character.get())->SetAction(ActionId::MagicAttackAll,10);
+            (character.get())->SetAction(ActionId::HealOne,10);
+            break;
+        case CharacterType::Healer:
+            (character.get())->SetAction(ActionId::AttackOne,10);
+            (character.get())->SetAction(ActionId::MagicAttackOne,10);
+            (character.get())->SetAction(ActionId::HealOne,60);
+            (character.get())->SetAction(ActionId::HealAll,20);
+            break;
+        case CharacterType::End:
+            std::cout<<"不明な CharacterType:" << static_cast<int>( characterType );
+            break;
+    }
 
     return character;
 }
@@ -295,6 +331,28 @@ unsigned int MakeLog(const LogType logType, const unsigned int param)
 }
 
 //--------------------------------------------------------------------------------------------------
+//指定されたチームの合計HPを取得する
+int sumHpByTeam( const std::vector<Character *>& list, const int teamNo )
+{
+    int sumHp = 0;
+    for( auto c : list )
+    {
+        if( c->GetTeamNo() == teamNo )
+        {
+            sumHp += c->GetParam( CharacterParam::Hp );
+        }
+    }
+    return sumHp;
+}
+
+//--------------------------------------------------------------------------------------------------
+// 行動を実行
+void ExecuteAction( std::vector<Character *>& list,  Character *c, unsigned int actionIndex )
+{
+    ;
+}
+
+//--------------------------------------------------------------------------------------------------
 // バトルログの生成
 void CreateBattleLog(std::vector<unsigned int> &log,
                      unsigned int randomSeed,
@@ -336,9 +394,34 @@ void CreateBattleLog(std::vector<unsigned int> &log,
         // 速度順に行動を処理
         for (Character *c : list)
         {
-            // 行動
+            // 行動を選択
+            unsigned int actionIndex = 0;
+
+            //行動を実行
+          ExecuteAction( list, c, actionIndex );
 
             // もしどちらかのチームが全滅しているなら終了
+            {
+                const int teamHp0 = sumHpByTeam(list,0);
+                const int teamHp1 = sumHpByTeam(list,1);
+                if( teamHp0 <= 0 )
+                {
+                    if( teamHp1 <= 0)
+                    {
+                        //引き分け 同時に０になった
+                    }
+                    else
+                    {
+                        //team1の勝ち
+                    }
+                }
+                else{
+                    if( teamHp1 < 0 )
+                    {
+                        //team0の勝ち
+                    }
+                }
+            }
         }
 
         loopCount++;
