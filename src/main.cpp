@@ -187,6 +187,18 @@ GetDefaultParam(const CharacterType ct) {
     return param;
 }
 
+//勝敗がつかないままこのターンを迎えると引き分けとする
+const unsigned int MaxTurn = 100;
+
+//勝敗
+enum class Result{
+    Team0Win,
+    Team1Win,
+    Draw,//相打ちによる引き分け
+    TurnOverDraw,//ターンオーバーによる引き分け
+};
+
+
 //--------------------------------------------------------------------------------------------------
 // キャラクター生成
 std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase,
@@ -302,7 +314,7 @@ unsigned int MakeLog(const LogType logType, const unsigned int param) {
 
 //--------------------------------------------------------------------------------------------------
 // 指定されたチームの合計HPを取得する
-int sumHpByTeam(const std::vector<Character *> &list, const int teamNo) {
+unsigned int sumHpByTeam(const std::vector<Character *> &list, const int teamNo) {
     int sumHp = 0;
     for (auto c : list) {
         if (c->GetTeamNo() == teamNo) {
@@ -316,7 +328,8 @@ int sumHpByTeam(const std::vector<Character *> &list, const int teamNo) {
 std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
                                      Character *actionCharacter, TargetSide ts,
                                      std::optional<TargetSelect> tsl,
-                                     TargetRange tr) {
+                                     TargetRange tr,
+                                    RandomManager &randomManager) {
     std::vector<unsigned int> target;
 
     if (ts == TargetSide::Enemy) {
@@ -352,19 +365,8 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
         } else {
             // 単体
             if (tsl == TargetSelect::LowestHp) {
+                // HPが低いものをターゲットとして選択
 
-                if (target.size() >= list.size()) {
-                    std::cout << "?";
-                }
-
-                for (auto t : target) {
-                    Character *p = list[t];
-                    if (p->GetParam(CharacterParam::Hp) <= 0) {
-                        std::cout << "?";
-                    }
-                }
-
-                // HPが低い
                 // 敵のリストをHPを低い順に並び替える
                 std::sort(target.begin(), target.end(),
                           [list](const int a, const int b) {
@@ -378,6 +380,7 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
             } else if (tsl == TargetSelect::Random) {
                 // ランダム
                 // 乱数で敵リストから１体を選択しターゲットリストに追加する
+                unsigned int randomNum = randomManager.Get();
             }
         }
 
@@ -399,7 +402,8 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
         } else {
             // 単体
             if (tsl == TargetSelect::LowestHp) {
-                // HPが低い
+                // HPが低いものをターゲットとして選択
+
                 // 味方のリストをHPの低い順に並び替える
                 std::sort(target.begin(), target.end(),
                           [list](const int a, const int b) {
@@ -426,7 +430,7 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
 // 行動を実行
 void ExecuteAction(
     std::vector<Character *> &list, Character *c, unsigned int actionIndex,
-    const std::vector<std::unique_ptr<ActionTable>> &actionTable) {
+    const std::vector<std::unique_ptr<ActionTable>> &actionTable, RandomManager& randomManager) {
 
     auto *acttbl = actionTable[actionIndex].get();
     const auto &act = acttbl->GetTable();
@@ -442,7 +446,7 @@ void ExecuteAction(
         TargetRange tr = a->GetTargetRange();
 
         // 効果の対象のインデックスのテーブルを作る
-        std::vector<unsigned int> targets = MakeTarget(list, c, ts, tsl, tr);
+        std::vector<unsigned int> targets = MakeTarget(list, c, ts, tsl, tr,randomManager);
 
         switch (et) {
 
@@ -471,12 +475,6 @@ void ExecuteAction(
                             }
 
                             // ダメージをHp に反映
-                            std::cout
-                                << "Damage index "
-                                << targetCharacter->GetIndex() << " Hp "
-                                << targetCharacter->GetParam(CharacterParam::Hp)
-                                << " -> " << hp << "\n";
-
                             targetCharacter->SetParam(CharacterParam::Hp, hp);
                         }
 
@@ -511,7 +509,9 @@ void CreateBattleLog(
     // 先頭に乱数を入れる
     log.push_back(randomSeed);
 
-    int result = 0;
+    RandomManager randomManager(randomSeed);
+
+    std::optional<Result> result;
     int turnNo = 0;
     int loopCount = 0;
     bool exit = false;
@@ -520,6 +520,11 @@ void CreateBattleLog(
         unsigned int v = MakeLog(LogType::TurnNo, turnNo);
         log.push_back(v);
         turnNo++;
+
+        if (turnNo >= MaxTurn) {
+            exit = true;
+            result = Result::TurnOverDraw;
+        }
 
         std::vector<Character *> list;
 
@@ -548,43 +553,47 @@ void CreateBattleLog(
             unsigned int actionIndex = 0;
 
             // 行動を実行
-            ExecuteAction(list, c, actionIndex, actionTable);
+            ExecuteAction(list, c, actionIndex, actionTable, randomManager);
 
             // もしどちらかのチームが全滅しているなら終了
             {
-                const int teamHp0 = sumHpByTeam(list, 0);
-                const int teamHp1 = sumHpByTeam(list, 1);
+                const unsigned int teamHp0 = sumHpByTeam(list, 0);
+                const unsigned int teamHp1 = sumHpByTeam(list, 1);
                 if (teamHp0 <= 0) {
                     if (teamHp1 <= 0) {
                         // 引き分け 同時に０になった
                         exit = true;
-                        result = 0;
+                        result = Result::Draw;
                     } else {
                         // team1の勝ち
                         exit = true;
-                        result = 1;
+                        result = Result::Team1Win;
                     }
                 } else {
-                    if (teamHp1 < 0) {
+                    if (teamHp1 <= 0) {
                         // team0の勝ち
                         exit = true;
-                        result = 2;
+                        result = Result::Team0Win;
                     }
                 }
             }
+
+            if( exit ){
+                break;
+            }
         }
 
-        std::cout << "Tern: " << loopCount << "\n";
+        if( exit ){
+            break;
+        }
+
+        //std::cout << "ターン: " << loopCount << "\n";
         for (const auto &c : character) {
             DisplayCharacter(*c);
         }
-        std::cout << "\n";
+        //std::cout << "\n";
 
-        loopCount++;
-        if (loopCount >= 100) {
-            exit = true;
-        }
-
+ 
         if (exit) {
             break;
         }
@@ -592,7 +601,7 @@ void CreateBattleLog(
 
     log.push_back(MakeLog(LogType::End, turnNo));
 
-    std::cout << "resut : " << result;
+    std::cout << "ターン "<<loopCount<<"\n";
 
     std::cout << "\n";
 }
