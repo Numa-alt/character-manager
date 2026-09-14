@@ -262,6 +262,7 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase,
 void DisplayCharacter(const Character &c) {
 
     std::cout << "TeamNo:" << c.GetTeamNo() << " ";
+    std::cout << "Index:" << c.GetIndex() << " ";
 
     switch (c.GetType()) {
         case CharacterType::Warrior:
@@ -321,15 +322,26 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
     if (ts == TargetSide::Enemy) {
         // 敵
 
+        //
+        std::cout << "事前チェック\n";
+        for (const auto &c : list) {
+            DisplayCharacter(*c);
+        }
+        std::cout << "\n";
+
         // 生きている敵のリストを作る
+        int listCount = 0;
         for (const Character *c : list) {
             if (actionCharacter->GetTeamNo() != c->GetTeamNo()) {
                 int hp = c->GetParam(CharacterParam::Hp);
                 int index = c->GetIndex();
                 if (hp > 0) {
-                    target.push_back(index);
+                    std::cout << "Set Target " << index << "li " << listCount
+                              << " Hp " << hp << "\n";
+                    target.push_back(listCount);
                 }
             }
+            listCount++;
         }
         std::cout << "target 生存 " << target.size() << "\n";
         std::cout << "list 生存 " << list.size() << "\n";
@@ -343,6 +355,13 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
 
                 if (target.size() >= list.size()) {
                     std::cout << "?";
+                }
+
+                for (auto t : target) {
+                    Character *p = list[t];
+                    if (p->GetParam(CharacterParam::Hp) <= 0) {
+                        std::cout << "?";
+                    }
                 }
 
                 // HPが低い
@@ -492,6 +511,7 @@ void CreateBattleLog(
     // 先頭に乱数を入れる
     log.push_back(randomSeed);
 
+    int result = 0;
     int turnNo = 0;
     int loopCount = 0;
     bool exit = false;
@@ -504,9 +524,7 @@ void CreateBattleLog(
         std::vector<Character *> list;
 
         for (const auto &c : character) {
-            if (c->GetParam(CharacterParam::Hp) > 0) {
-                list.push_back(c.get());
-            }
+            list.push_back(c.get());
         }
 
         // キャラをシャッフル(速度が同じキャラが複数いた場合に、いつも同じ順番にならないよう)
@@ -520,6 +538,12 @@ void CreateBattleLog(
 
         // 速度順に行動を処理
         for (Character *c : list) {
+
+            // 死んでいるキャラクターは行動しない
+            if (c->GetParam(CharacterParam::Hp) <= 0) {
+                continue;
+            }
+
             // 行動を選択
             unsigned int actionIndex = 0;
 
@@ -533,12 +557,18 @@ void CreateBattleLog(
                 if (teamHp0 <= 0) {
                     if (teamHp1 <= 0) {
                         // 引き分け 同時に０になった
+                        exit = true;
+                        result = 0;
                     } else {
                         // team1の勝ち
+                        exit = true;
+                        result = 1;
                     }
                 } else {
                     if (teamHp1 < 0) {
                         // team0の勝ち
+                        exit = true;
+                        result = 2;
                     }
                 }
             }
@@ -561,6 +591,8 @@ void CreateBattleLog(
     }
 
     log.push_back(MakeLog(LogType::End, turnNo));
+
+    std::cout << "resut : " << result;
 
     std::cout << "\n";
 }
