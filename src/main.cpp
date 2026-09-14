@@ -349,15 +349,15 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
                 int hp = c->GetParam(CharacterParam::Hp);
                 int index = c->GetIndex();
                 if (hp > 0) {
-                    std::cout << "Set Target " << index << "li " << listCount
-                              << " Hp " << hp << "\n";
+                    // std::cout << "Set Target " << index << "li " << listCount
+                    //           << " Hp " << hp << "\n";
                     target.push_back(listCount);
                 }
             }
             listCount++;
         }
-        std::cout << "target 生存 " << target.size() << "\n";
-        std::cout << "list 生存 " << list.size() << "\n";
+        // std::cout << "target 生存 " << target.size() << "\n";
+        // std::cout << "list 生存 " << list.size() << "\n";
 
         if (tr == TargetRange::All) {
             // 敵全体
@@ -380,7 +380,18 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
             } else if (tsl == TargetSelect::Random) {
                 // ランダム
                 // 乱数で敵リストから１体を選択しターゲットリストに追加する
-                unsigned int randomNum = randomManager.Get();
+                if( target.size() > 0 ){
+                    unsigned int selectIndex = randomManager.Get() % target.size();
+                    unsigned int selectData = target[ selectIndex ];
+                    auto newEnd = std::remove_if(target.begin(),target.end(),
+                    [selectData](const auto& a)
+                    {
+                         return ( selectData != a );
+                    });
+                    target.erase(newEnd,target.end());
+                }
+                
+
             }
         }
 
