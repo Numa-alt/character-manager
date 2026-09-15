@@ -95,6 +95,8 @@ enum class ActionId {
 class CharacterAction {
   public:
     CharacterAction(ActionId id, unsigned int per) : mId(id), mPercent(per) {}
+    unsigned int GetPercent() const { return mPercent; }
+    ActionId GetActionId() const { return mId; }
 
   private:
     ActionId mId;
@@ -128,6 +130,13 @@ class Character {
     // 行動IDとその確率を設定
     void SetAction(ActionId actionId, unsigned int probability) {
         mAction.push_back(CharacterAction(actionId, probability));
+    }
+
+    // 何個の行動が選択できるか
+    int GetActionSelectNum() const { return mAction.size(); }
+    // 指定のインデックスのアクションを選択する確率を取得
+    unsigned int GetActionProbability(const unsigned int index) const {
+        return mAction[index].GetPercent();
     }
 
     // 現在HPを最大HPに
@@ -652,6 +661,11 @@ unsigned int
 SelectAction(const std::vector<Character *> &list, const Character *c,
              const std::vector<std::unique_ptr<ActionTable>> &actionTable,
              RandomManager &randomManager) {
+    int actionNum = c->GetActionSelectNum();
+    if (actionNum > 0) {
+        unsigned int random = randomManager.Get() % actionNum;
+        return random;
+    }
     return 0;
 }
 //--------------------------------------------------------------------------------------------------
