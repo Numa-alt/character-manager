@@ -113,6 +113,7 @@ enum class CharacterParam { Hp, MaxHp, Attack, Magic, Defence, Speed, End };
 //--------------------------------------------------------------------------------------------------
 class Character {
   private:
+    std::string mName;
     CharacterType mType;
     int mTeamNo;
     std::array<int, static_cast<int>(CharacterParam::End)> mParam{};
@@ -129,9 +130,26 @@ class Character {
         mAction.push_back(CharacterAction(actionId, probability));
     }
 
+    // 現在HPを最大HPに
+    void ResetHp() {
+        mParam[static_cast<int>(CharacterParam::Hp)] =
+            mParam[static_cast<int>(CharacterParam::MaxHp)];
+    }
+
+    void SetDamage(const int damage) {
+        int hp = mParam[static_cast<int>(CharacterParam::Hp)] - damage;
+        if (hp < 0) {
+            hp = 0;
+        }
+        mParam[static_cast<int>(CharacterParam::Hp)] = hp;
+    }
+
     unsigned int GetIndex() const { return mIndex; }
 
     CharacterType GetType() const { return mType; }
+
+    void SetName(std::string &name) { mName = std::move(name); }
+    const std::string &GetName() const { return mName; }
 
     void SetTeamNo(int teamNo) { mTeamNo = teamNo; }
 
@@ -187,17 +205,16 @@ GetDefaultParam(const CharacterType ct) {
     return param;
 }
 
-//勝敗がつかないままこのターンを迎えると引き分けとする
-const unsigned int MaxTurn = 100;
+// 勝敗がつかないままこのターンを迎えると引き分けとする
+const unsigned int MaxTurn = 500;
 
-//勝敗
-enum class Result{
+// 勝敗
+enum class Result {
     Team0Win,
     Team1Win,
-    Draw,//相打ちによる引き分け
-    TurnOverDraw,//ターンオーバーによる引き分け
+    Draw,         // 相打ちによる引き分け
+    TurnOverDraw, // ターンオーバーによる引き分け
 };
-
 
 //--------------------------------------------------------------------------------------------------
 // キャラクター生成
@@ -222,6 +239,10 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase,
     (character.get())->SetTeamNo(teamNo);
 
     (character.get())->SetRandomBase(randomBase);
+
+    std::string names[] = {"りんご", "みかん", "ばなな",
+                           "きうい", "なし　", "めろん"};
+    (character.get())->SetName(names[index]);
 
     // デフォルトのパラメータを設定
     for (int i = 0; i < static_cast<int>(CharacterParam::End); i++) {
@@ -276,6 +297,14 @@ void DisplayCharacter(const Character &c) {
     std::cout << "TeamNo:" << c.GetTeamNo() << " ";
     std::cout << "Index:" << c.GetIndex() << " ";
 
+    if (c.GetParam(CharacterParam::Hp) <= 0) {
+        std::cout << "*";
+    } else {
+        std::cout << " ";
+    }
+
+    std::cout << c.GetName() << " ";
+
     switch (c.GetType()) {
         case CharacterType::Warrior:
             std::cout << "戦士　　 ";
@@ -301,8 +330,15 @@ void DisplayCharacter(const Character &c) {
 
 // バトルログのデータの種類
 enum class LogType {
-    TurnNo, // ターン番号
-    End,    // バトル終了
+    TurnNo,     // ターン番号(ターン番号)
+    Action,     // 行動(キャラクターインデックス)
+    EffectType, // どんな行動をしたか
+    Target,     // 対象(キャラクターインデックス)
+    Damage,     // ダメージを与える(HPダメージ数)
+    Heal,       // 回復する(HP回復数)
+    Dead,       // 死亡(キャラクターインデックス)
+    Result,     // 勝敗(結果)
+    End,        // バトル終了
 };
 
 unsigned int MakeLog(const LogType logType, const unsigned int param) {
@@ -314,7 +350,8 @@ unsigned int MakeLog(const LogType logType, const unsigned int param) {
 
 //--------------------------------------------------------------------------------------------------
 // 指定されたチームの合計HPを取得する
-unsigned int sumHpByTeam(const std::vector<Character *> &list, const int teamNo) {
+unsigned int sumHpByTeam(const std::vector<Character *> &list,
+                         const int teamNo) {
     int sumHp = 0;
     for (auto c : list) {
         if (c->GetTeamNo() == teamNo) {
@@ -329,18 +366,18 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
                                      Character *actionCharacter, TargetSide ts,
                                      std::optional<TargetSelect> tsl,
                                      TargetRange tr,
-                                    RandomManager &randomManager) {
+                                     RandomManager &randomManager) {
     std::vector<unsigned int> target;
 
     if (ts == TargetSide::Enemy) {
         // 敵
 
         //
-        std::cout << "事前チェック\n";
-        for (const auto &c : list) {
-            DisplayCharacter(*c);
-        }
-        std::cout << "\n";
+        // std::cout << "事前チェック\n";
+        // for (const auto &c : list) {
+        //     DisplayCharacter(*c);
+        // }
+        // std::cout << "\n";
 
         // 生きている敵のリストを作る
         int listCount = 0;
@@ -380,18 +417,16 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
             } else if (tsl == TargetSelect::Random) {
                 // ランダム
                 // 乱数で敵リストから１体を選択しターゲットリストに追加する
-                if( target.size() > 0 ){
-                    unsigned int selectIndex = randomManager.Get() % target.size();
-                    unsigned int selectData = target[ selectIndex ];
-                    auto newEnd = std::remove_if(target.begin(),target.end(),
-                    [selectData](const auto& a)
-                    {
-                         return ( selectData != a );
-                    });
-                    target.erase(newEnd,target.end());
+                if (target.size() > 0) {
+                    unsigned int selectIndex =
+                        randomManager.Get() % target.size();
+                    unsigned int selectData = target[selectIndex];
+                    auto newEnd = std::remove_if(target.begin(), target.end(),
+                                                 [selectData](const auto &a) {
+                                                     return (selectData != a);
+                                                 });
+                    target.erase(newEnd, target.end());
                 }
-                
-
             }
         }
 
@@ -439,12 +474,20 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
 
 //--------------------------------------------------------------------------------------------------
 // 行動を実行
-void ExecuteAction(
-    std::vector<Character *> &list, Character *c, unsigned int actionIndex,
-    const std::vector<std::unique_ptr<ActionTable>> &actionTable, RandomManager& randomManager) {
+void ExecuteAction(std::vector<unsigned int> &log,
+                   std::vector<Character *> &list, Character *c,
+                   unsigned int actionIndex,
+                   const std::vector<std::unique_ptr<ActionTable>> &actionTable,
+                   RandomManager &randomManager) {
 
     auto *acttbl = actionTable[actionIndex].get();
     const auto &act = acttbl->GetTable();
+
+    std::cout << "    行動 " << c->GetName() << "[" << c->GetIndex() << "]"
+              << " HP " << c->GetParam(CharacterParam::Hp);
+    if (c->GetParam(CharacterParam::Hp) <= 0) {
+        std::cout << "?";
+    }
 
     for (const std::unique_ptr<Action> &a : act) {
         // 攻撃か回復か
@@ -457,7 +500,13 @@ void ExecuteAction(
         TargetRange tr = a->GetTargetRange();
 
         // 効果の対象のインデックスのテーブルを作る
-        std::vector<unsigned int> targets = MakeTarget(list, c, ts, tsl, tr,randomManager);
+        std::vector<unsigned int> targets =
+            MakeTarget(list, c, ts, tsl, tr, randomManager);
+
+        log.push_back(MakeLog(LogType::Action, c->GetIndex())); //
+
+        log.push_back(
+            MakeLog(LogType::EffectType, static_cast<unsigned int>(et))); //
 
         switch (et) {
 
@@ -476,17 +525,55 @@ void ExecuteAction(
                             if (damage < 1) {
                                 damage = 1;
                             }
-                            int hp =
-                                targetCharacter->GetParam(CharacterParam::Hp) -
-                                damage;
 
-                            // マイナスにはならない
-                            if (hp < 0) {
-                                hp = 0;
-                            }
+                            int baseHp =
+                                targetCharacter->GetParam(CharacterParam::Hp);
+
+                            targetCharacter->SetDamage(damage);
+
+                            int resultHp =
+                                targetCharacter->GetParam(CharacterParam::Hp);
+
+                            // int baseHp =
+                            //     targetCharacter->GetParam(CharacterParam::Hp);
+
+                            // int hp =
+                            //     targetCharacter->GetParam(CharacterParam::Hp)
+                            //     - damage;
+
+                            // // マイナスにはならない
+                            // if (hp < 0) {
+                            //     hp = 0;
+                            // }
 
                             // ダメージをHp に反映
-                            targetCharacter->SetParam(CharacterParam::Hp, hp);
+                            // targetCharacter->SetParam(CharacterParam::Hp,
+                            // hp);
+
+                            std::cout
+                                << "        物理攻撃 "
+                                << " ターゲット:" << targetCharacter->GetName()
+                                << "[" << targetCharacter->GetIndex() << "] "
+                                << "ダメージ " << damage << " Hp: " << baseHp
+                                << " -> " << resultHp;
+
+                            if (targetCharacter->GetParam(CharacterParam::Hp) <=
+                                0) {
+                                std::cout << " 死亡  ";
+                            }
+                            std::cout << "\n";
+
+                            // ログに追加
+                            log.push_back(
+                                MakeLog(LogType::Target,
+                                        targetCharacter->GetIndex()));       //
+                            log.push_back(MakeLog(LogType::Damage, damage)); //
+                            if (targetCharacter->GetParam(CharacterParam::Hp) <=
+                                0) {
+                                log.push_back(
+                                    MakeLog(LogType::Dead,
+                                            targetCharacter->GetIndex()));
+                            }
                         }
 
                         break;
@@ -505,8 +592,6 @@ void ExecuteAction(
                 break;
             }
         }
-
-        int count = 0;
     }
 }
 
@@ -517,14 +602,14 @@ void CreateBattleLog(
     std::vector<std::unique_ptr<Character>> &character,
     const std::vector<std::unique_ptr<ActionTable>> &actionTable) {
     log.clear();
-    // 先頭に乱数を入れる
-    log.push_back(randomSeed);
+    // // 先頭に乱数を入れる
+    // log.push_back(randomSeed);
 
     RandomManager randomManager(randomSeed);
 
     std::optional<Result> result;
     int turnNo = 0;
-    int loopCount = 0;
+
     bool exit = false;
     while (1) {
         // ターン番号を保存
@@ -532,15 +617,34 @@ void CreateBattleLog(
         log.push_back(v);
         turnNo++;
 
+        std::vector<Character *> list;
+
+        // キャラ情報
+        for (const auto &c : character) {
+            list.push_back(c.get());
+        }
+
+        std::cout << "----------------------------\n";
+        std::cout << "ターン " << turnNo << " ランダム "
+                  << randomManager.Check() << " ";
+        {
+            // それぞれのチームの残りHP
+            const unsigned int teamHp0 = sumHpByTeam(list, 0);
+            const unsigned int teamHp1 = sumHpByTeam(list, 1);
+            std::cout << "    チーム0 :" << teamHp0;
+            std::cout << "    チーム1 :" << teamHp1;
+        }
+        std::cout << "\n";
+
+        // ターン開始前のキャラの状態
+        for (const auto &c : character) {
+            std::cout << "    ";
+            DisplayCharacter(*c);
+        }
+
         if (turnNo >= MaxTurn) {
             exit = true;
             result = Result::TurnOverDraw;
-        }
-
-        std::vector<Character *> list;
-
-        for (const auto &c : character) {
-            list.push_back(c.get());
         }
 
         // キャラをシャッフル(速度が同じキャラが複数いた場合に、いつも同じ順番にならないよう)
@@ -564,7 +668,8 @@ void CreateBattleLog(
             unsigned int actionIndex = 0;
 
             // 行動を実行
-            ExecuteAction(list, c, actionIndex, actionTable, randomManager);
+            ExecuteAction(log, list, c, actionIndex, actionTable,
+                          randomManager);
 
             // もしどちらかのチームが全滅しているなら終了
             {
@@ -589,30 +694,49 @@ void CreateBattleLog(
                 }
             }
 
-            if( exit ){
+            if (exit) {
                 break;
             }
         }
 
-        if( exit ){
-            break;
-        }
-
-        //std::cout << "ターン: " << loopCount << "\n";
-        for (const auto &c : character) {
-            DisplayCharacter(*c);
-        }
-        //std::cout << "\n";
-
- 
         if (exit) {
             break;
         }
     }
 
-    log.push_back(MakeLog(LogType::End, turnNo));
+    // キャラの状態
+    for (const auto &c : character) {
+        std::cout << "    ";
+        DisplayCharacter(*c);
+    }
 
-    std::cout << "ターン "<<loopCount<<"\n";
+    if (result.has_value()) {
+
+        switch (result.value()) {
+            case Result::Draw: {
+                std::cout << "結果 引き分け" << "\n";
+                break;
+            }
+
+            case Result::Team0Win: {
+                std::cout << "結果 チーム0の勝ち " << "\n";
+                break;
+            }
+
+            case Result::Team1Win: {
+                std::cout << "結果 チーム1の勝ち " << "\n";
+            }
+
+            case Result::TurnOverDraw: {
+                std::cout << "結果 ターンオーバーの引き分け" << "\n";
+                break;
+            }
+        }
+
+        log.push_back(MakeLog(LogType::Result,
+                              static_cast<unsigned int>(result.value()))); //
+    }
+    log.push_back(MakeLog(LogType::End, turnNo));
 
     std::cout << "\n";
 }
@@ -778,11 +902,16 @@ int main() {
 
                 std::cout << "乱数 " << randomSeed << " でバトルを開始します\n";
 
+                // HPを最大にリセットする
+                for (auto &a : character) {
+                    a->ResetHp();
+                }
+
                 // バトルログを初期化
                 battleLog.clear();
 
                 // 先頭に乱数種を保存
-                battleLog.push_back(randomSeed);
+                // battleLog.push_back(randomSeed);
 
                 // キャラクター、乱数種を渡してバトルログを構築
                 CreateBattleLog(battleLog, randomSeed, character, actionTable);
@@ -794,13 +923,111 @@ int main() {
             {
                 std::cout << "ログを確認します\n";
 
-                std::cout.setf(std::ios::hex, std::ios::basefield);
+                std::cout.setf(std::ios::dec, std::ios::basefield);
+
+                // HPを最大にリセットする
+                for (auto &a : character) {
+                    a->ResetHp();
+                }
+
+                unsigned int TargetCharacterIndex = 0;
+
                 int lineCount = 0;
                 for (const unsigned int log : battleLog) {
-                    std::cout << log << " ";
-                    lineCount++;
-                    if (lineCount >= 8) {
-                        std::cout << "\n";
+                    LogType logType = static_cast<LogType>((log >> 24) & 0xFF);
+                    unsigned int param = (log & 0xFFFFFF);
+                    switch (logType) {
+                        case LogType::TurnNo: {
+                            std::cout << "----------\n";
+                            unsigned int turnNo = param;
+                            std::cout << "ターン " << turnNo << "\n";
+
+                            // ターン開始前のキャラの状態
+                            for (const auto &c : character) {
+                                std::cout << "    ";
+                                DisplayCharacter(*c);
+                            }
+
+                            break;
+                        }
+
+                        case LogType::Action: {
+                            unsigned int characterIndex = param;
+                            const auto &c = character[characterIndex];
+                            std::cout << "    行動 " << c->GetIndex() << "\n";
+                            DisplayCharacter(*c);
+                            break;
+                        }
+
+                        case LogType::EffectType: {
+                            std::cout << "    行動タイプ ";
+                            switch (static_cast<EffectType>(param)) {
+                                case EffectType::Attack: {
+                                    std::cout << "攻撃 ";
+                                    break;
+                                }
+
+                                case EffectType::Heal: {
+                                    std::cout << "回復 ";
+                                    break;
+                                }
+                            }
+
+                            std::cout << "\n";
+                            break;
+                        }
+
+                        case LogType::Target: {
+                            std::cout << "    ターゲット " << param << " ";
+                            TargetCharacterIndex = param;
+                            const auto &c = character[param];
+                            DisplayCharacter(*c);
+                            std::cout << "\n";
+                            break;
+                        }
+
+                        case LogType::Damage: {
+                            std::cout << "    ダメージ " << param << " ";
+                            auto &c = character[TargetCharacterIndex];
+
+                            c->SetDamage(param);
+
+                            // unsigned int hp =
+                            //     c->GetParam(CharacterParam::Hp) - param;
+                            // c->SetParam(CharacterParam::Hp, hp);
+
+                            DisplayCharacter(*c);
+                            std::cout << "\n";
+                            break;
+                        }
+
+                        case LogType::Heal: {
+                            std::cout << "    回復 " << param << " ";
+                            auto &c = character[TargetCharacterIndex];
+                            unsigned int hp =
+                                c->GetParam(CharacterParam::Hp) + param;
+                            c->SetParam(CharacterParam::Hp, hp);
+                            DisplayCharacter(*c);
+                            std::cout << "\n";
+                            break;
+                        }
+
+                        case LogType::Dead: {
+                            std::cout << "    死亡 " << param << " ";
+                            std::cout << "\n";
+                            break;
+                        }
+
+                        case LogType::Result: {
+                            std::cout << "    結果 " << param << " ";
+                            std::cout << "\n";
+                            break;
+                        }
+
+                        case LogType::End: {
+                            std::cout << "    終了\n";
+                            break;
+                        }
                     }
                 }
                 std::cout << "\n";
@@ -829,125 +1056,106 @@ int main() {
     return 0;
 }
 
+#include <algorithm>
 #include <iostream>
 #include <optional>
 #include <string>
-#include <vector>
-#include <algorithm>
 #include <utility>
+#include <vector>
 
-class Score{
-private:
+class Score {
+  private:
     int id;
     std::string name;
     int point;
-public:
-    Score(int _id, std::string _name, int _point):id(_id),name(std::move(_name)),point(_point){}
-    int GetId() const{return id;}
-    const std::string& GetName()const{return name;}
-    int GetPoint()const{ return point;}
+
+  public:
+    Score(int _id, std::string _name, int _point)
+        : id(_id), name(std::move(_name)), point(_point) {}
+    int GetId() const { return id; }
+    const std::string &GetName() const { return name; }
+    int GetPoint() const { return point; }
 };
 
-class ScoreManager{
-private:
+class ScoreManager {
+  private:
     std::vector<Score> scoreTable;
     int nextId;
 
-    int GetNextId(){
+    int GetNextId() {
         nextId++;
         return nextId;
     }
 
-public:
-    ScoreManager():nextId(0){}
+  public:
+    ScoreManager() : nextId(0) {}
 
-    void AddScore(std::string name, int point){
-        scoreTable.emplace_back( GetNextId(), std::move(name), point );
+    void AddScore(std::string name, int point) {
+        scoreTable.emplace_back(GetNextId(), std::move(name), point);
     }
-    std::optional<int> FindPointById(int id) const
-    {
-        auto it = std::find_if(
-            scoreTable.begin(),
-            scoreTable.end(),
-            [id](const auto& a)
-            {
-                return ( a.GetId() == id );
-            }
-        );
-        
-        if(it != scoreTable.end()){
+    std::optional<int> FindPointById(int id) const {
+        auto it =
+            std::find_if(scoreTable.begin(), scoreTable.end(),
+                         [id](const auto &a) { return (a.GetId() == id); });
+
+        if (it != scoreTable.end()) {
             return it->GetPoint();
         }
         return std::nullopt;
     }
 
-    std::optional<int> FindIdByName( const std::string & name ) const
-    {
+    std::optional<int> FindIdByName(const std::string &name) const {
         auto it = std::find_if(
-            scoreTable.begin(),
-            scoreTable.end(),
-            [ name ]( const auto & a)
-            {
-                return ( a.GetName() == name );
-            }
-        );
+            scoreTable.begin(), scoreTable.end(),
+            [name](const auto &a) { return (a.GetName() == name); });
 
-        if( it != scoreTable.end() ){
+        if (it != scoreTable.end()) {
             return it->GetId();
         }
         return std::nullopt;
     }
 
-    bool RemoveScoreById(int id)
-    {
-        auto it = std::remove_if(
-            scoreTable.begin(),
-            scoreTable.end(),
-            [id]( const auto& a)
-            {
-                return ( a.GetId() == id );
-            }
-        );
+    bool RemoveScoreById(int id) {
+        auto it =
+            std::remove_if(scoreTable.begin(), scoreTable.end(),
+                           [id](const auto &a) { return (a.GetId() == id); });
 
-        if( it != scoreTable.end() ){
-            scoreTable.erase(it, scoreTable.end() );
+        if (it != scoreTable.end()) {
+            scoreTable.erase(it, scoreTable.end());
             return true;
         }
         return false;
     }
-    const std::vector<Score>& GetScores()const{
-        return scoreTable;
-    }
+    const std::vector<Score> &GetScores() const { return scoreTable; }
 };
 
-void DisplayScore( const std::vector<Score>& score )
-{
-    for( const auto & i : score ){
-        std::cout<<"id "<<i.GetId()<<" name "<<i.GetName() << " point " << i.GetPoint()<<"\n";
+void DisplayScore(const std::vector<Score> &score) {
+    for (const auto &i : score) {
+        std::cout << "id " << i.GetId() << " name " << i.GetName() << " point "
+                  << i.GetPoint() << "\n";
     }
 }
-void TestFunc()
-{
+void TestFunc() {
     ScoreManager scoreManager;
-    scoreManager.AddScore("test0",90 );
-    scoreManager.AddScore("test1",80 );
-    scoreManager.AddScore("test2",85 );
+    scoreManager.AddScore("test0", 90);
+    scoreManager.AddScore("test1", 80);
+    scoreManager.AddScore("test2", 85);
 
     std::optional<int> id = scoreManager.FindIdByName("test0");
-    if( id.has_value() ){
-        std::optional<int>point = scoreManager.FindPointById(id.value());
-        if( point.has_value() ){
-            std::cout<<"id "<<id.value() << " point " << point.value() << "\n";
+    if (id.has_value()) {
+        std::optional<int> point = scoreManager.FindPointById(id.value());
+        if (point.has_value()) {
+            std::cout << "id " << id.value() << " point " << point.value()
+                      << "\n";
         }
     }
 
-    DisplayScore( scoreManager.GetScores() );
+    DisplayScore(scoreManager.GetScores());
 
-    if( id.has_value() ){
-        std::cout<<"remove id " << id.value() <<"\n";
-        scoreManager.RemoveScoreById( id.value() );
+    if (id.has_value()) {
+        std::cout << "remove id " << id.value() << "\n";
+        scoreManager.RemoveScoreById(id.value());
     }
 
-    DisplayScore( scoreManager.GetScores() );
+    DisplayScore(scoreManager.GetScores());
 }
-
