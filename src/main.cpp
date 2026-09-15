@@ -136,12 +136,21 @@ class Character {
             mParam[static_cast<int>(CharacterParam::MaxHp)];
     }
 
+    // ダメージ
     void SetDamage(const int damage) {
         int hp = mParam[static_cast<int>(CharacterParam::Hp)] - damage;
         if (hp < 0) {
             hp = 0;
         }
-        mParam[static_cast<int>(CharacterParam::Hp)] = hp;
+        SetParam(CharacterParam::Hp, hp);
+    }
+    // 回復
+    void HealHp(const int heal) {
+        int hp = mParam[static_cast<int>(CharacterParam::Hp)] + heal;
+        if (hp > mParam[static_cast<int>(CharacterParam::MaxHp)]) {
+            hp = mParam[static_cast<int>(CharacterParam::MaxHp)];
+        }
+        SetParam(CharacterParam::Hp, hp);
     }
 
     unsigned int GetIndex() const { return mIndex; }
@@ -526,29 +535,13 @@ void ExecuteAction(std::vector<unsigned int> &log,
                                 damage = 1;
                             }
 
-                            int baseHp =
+                            const int baseHp =
                                 targetCharacter->GetParam(CharacterParam::Hp);
 
                             targetCharacter->SetDamage(damage);
 
-                            int resultHp =
+                            const int resultHp =
                                 targetCharacter->GetParam(CharacterParam::Hp);
-
-                            // int baseHp =
-                            //     targetCharacter->GetParam(CharacterParam::Hp);
-
-                            // int hp =
-                            //     targetCharacter->GetParam(CharacterParam::Hp)
-                            //     - damage;
-
-                            // // マイナスにはならない
-                            // if (hp < 0) {
-                            //     hp = 0;
-                            // }
-
-                            // ダメージをHp に反映
-                            // targetCharacter->SetParam(CharacterParam::Hp,
-                            // hp);
 
                             std::cout
                                 << "        物理攻撃 "
@@ -581,6 +574,50 @@ void ExecuteAction(std::vector<unsigned int> &log,
 
                     // 魔法攻撃
                     case ParamType::Magic: {
+                        const int attack = c->GetParam(CharacterParam::Magic);
+
+                        for (auto index : targets) {
+                            Character *targetCharacter = list[index];
+                            int damage = attack - targetCharacter->GetParam(
+                                                      CharacterParam::Defence);
+                            // どれほど固くても１ダメージは与える
+                            if (damage < 1) {
+                                damage = 1;
+                            }
+
+                            const int baseHp =
+                                targetCharacter->GetParam(CharacterParam::Hp);
+
+                            targetCharacter->SetDamage(damage);
+
+                            const int resultHp =
+                                targetCharacter->GetParam(CharacterParam::Hp);
+
+                            std::cout
+                                << "        魔法攻撃 "
+                                << " ターゲット:" << targetCharacter->GetName()
+                                << "[" << targetCharacter->GetIndex() << "] "
+                                << "ダメージ " << damage << " Hp: " << baseHp
+                                << " -> " << resultHp;
+
+                            if (targetCharacter->GetParam(CharacterParam::Hp) <=
+                                0) {
+                                std::cout << " 死亡  ";
+                            }
+                            std::cout << "\n";
+
+                            // ログに追加
+                            log.push_back(
+                                MakeLog(LogType::Target,
+                                        targetCharacter->GetIndex()));       //
+                            log.push_back(MakeLog(LogType::Damage, damage)); //
+                            if (targetCharacter->GetParam(CharacterParam::Hp) <=
+                                0) {
+                                log.push_back(
+                                    MakeLog(LogType::Dead,
+                                            targetCharacter->GetIndex()));
+                            }
+                        }
                         break;
                     }
                 }
@@ -589,12 +626,34 @@ void ExecuteAction(std::vector<unsigned int> &log,
 
             // 回復
             case EffectType::Heal: {
+                const int heal = c->GetParam(CharacterParam::Magic);
+                for (auto index : targets) {
+                    Character *targetCharacter = list[index];
+                    const int baseHp =
+                        targetCharacter->GetParam(CharacterParam::Hp);
+                    targetCharacter->HealHp(heal);
+
+                    const int resultHp =
+                        targetCharacter->GetParam(CharacterParam::Hp);
+                    // ログに追加
+                    log.push_back(MakeLog(LogType::Target,
+                                          targetCharacter->GetIndex())); //
+                    log.push_back(MakeLog(LogType::Heal, heal));         //
+                }
                 break;
             }
         }
     }
 }
 
+//--------------------------------------------------------------------------------------------------
+// 行動を選択
+unsigned int
+SelectAction(const std::vector<Character *> &list, const Character *c,
+             const std::vector<std::unique_ptr<ActionTable>> &actionTable,
+             RandomManager &randomManager) {
+    return 0;
+}
 //--------------------------------------------------------------------------------------------------
 // バトルログの生成
 void CreateBattleLog(
@@ -665,7 +724,8 @@ void CreateBattleLog(
             }
 
             // 行動を選択
-            unsigned int actionIndex = 0;
+            unsigned int actionIndex =
+                SelectAction(list, c, actionTable, randomManager);
 
             // 行動を実行
             ExecuteAction(log, list, c, actionIndex, actionTable,
@@ -725,6 +785,7 @@ void CreateBattleLog(
 
             case Result::Team1Win: {
                 std::cout << "結果 チーム1の勝ち " << "\n";
+                break;
             }
 
             case Result::TurnOverDraw: {
@@ -886,6 +947,10 @@ int main() {
                     unsigned int rndSub = randCharacter.Get();
                     character.push_back(CreateCharacter(rndSub, i, teamNo));
                 }
+
+                // バトルログを初期化
+                battleLog.clear();
+
                 for (const auto &c : character) {
                     DisplayCharacter(*c);
                 }
