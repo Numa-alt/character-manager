@@ -172,7 +172,7 @@ class Character {
 
     CharacterType GetType() const { return mType; }
 
-    void SetName(std::string &name) { mName = std::move(name); }
+    void SetName(const std::string &name) { mName = std::move(name); }
     const std::string &GetName() const { return mName; }
 
     void SetTeamNo(int teamNo) { mTeamNo = teamNo; }
@@ -195,31 +195,31 @@ GetDefaultParam(const CharacterType ct) {
     std::array<int, static_cast<int>(CharacterParam::End)> param;
 
     switch (ct) {
-        case CharacterType::Warrior: // 基礎パラメータ(HP50 攻撃力 30 防御力15
+        case CharacterType::Warrior: // 基礎パラメータ(HP50 攻撃力 30 防御力5
                                      // 魔力5 素早さ10 )
             param[static_cast<int>(CharacterParam::MaxHp)] = 50;
             param[static_cast<int>(CharacterParam::Hp)] = 50;
             param[static_cast<int>(CharacterParam::Attack)] = 30;
             param[static_cast<int>(CharacterParam::Magic)] = 5;
-            param[static_cast<int>(CharacterParam::Defence)] = 15;
+            param[static_cast<int>(CharacterParam::Defence)] = 5;
             param[static_cast<int>(CharacterParam::Speed)] = 10;
             break;
-        case CharacterType::Caster: // 基礎パラメータ(HP30 攻撃力 20 防御力10
+        case CharacterType::Caster: // 基礎パラメータ(HP30 攻撃力 20 防御力0
                                     // 魔力40 素早さ7 )
             param[static_cast<int>(CharacterParam::MaxHp)] = 30;
             param[static_cast<int>(CharacterParam::Hp)] = 30;
             param[static_cast<int>(CharacterParam::Attack)] = 20;
             param[static_cast<int>(CharacterParam::Magic)] = 40;
-            param[static_cast<int>(CharacterParam::Defence)] = 10;
+            param[static_cast<int>(CharacterParam::Defence)] = 0;
             param[static_cast<int>(CharacterParam::Speed)] = 7;
             break;
         case CharacterType::Healer: // 基礎パラメータ基礎パラメータ(HP35 攻撃力
-                                    // 20 防御力15 魔力30 素早さ5 )
+                                    // 20 防御力5 魔力30 素早さ5 )
             param[static_cast<int>(CharacterParam::MaxHp)] = 35;
             param[static_cast<int>(CharacterParam::Hp)] = 35;
             param[static_cast<int>(CharacterParam::Attack)] = 20;
             param[static_cast<int>(CharacterParam::Magic)] = 30;
-            param[static_cast<int>(CharacterParam::Defence)] = 15;
+            param[static_cast<int>(CharacterParam::Defence)] = 5;
             param[static_cast<int>(CharacterParam::Speed)] = 5;
             break;
         case CharacterType::End:
@@ -390,7 +390,7 @@ unsigned int sumHpByTeam(const std::vector<Character *> &list,
 std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
                                      Character *actionCharacter, TargetSide ts,
                                      std::optional<TargetSelect> tsl,
-                                     TargetRange tr, EffectType et,
+                                     TargetRange tr,
                                      RandomManager &randomManager) {
     std::vector<unsigned int> target;
 
@@ -564,7 +564,7 @@ void ExecuteAction(std::vector<unsigned int> &log,
 
         // 効果の対象のインデックスのテーブルを作る
         std::vector<unsigned int> targets =
-            MakeTarget(list, c, ts, tsl, tr, et, randomManager);
+            MakeTarget(list, c, ts, tsl, tr, randomManager);
 
         log.push_back(MakeLog(LogType::Action, c->GetIndex())); //
 
@@ -719,9 +719,12 @@ bool isExistFriendDamaged(const std::vector<Character *> &list,
                           unsigned int teamNo) {
     for (const auto c : list) {
         if (c->GetTeamNo() == teamNo) {
-            if (c->GetParam(CharacterParam::MaxHp) >
-                c->GetParam(CharacterParam::Hp)) {
-                return true;
+            // 死亡したキャラは除外
+            if (c->GetParam(CharacterParam::Hp) > 0) {
+                if (c->GetParam(CharacterParam::MaxHp) >
+                    c->GetParam(CharacterParam::Hp)) {
+                    return true;
+                }
             }
         }
     }
@@ -730,10 +733,8 @@ bool isExistFriendDamaged(const std::vector<Character *> &list,
 
 //--------------------------------------------------------------------------------------------------
 // 行動を選択
-ActionId
-SelectAction(const std::vector<Character *> &list, const Character *c,
-             const std::vector<std::unique_ptr<ActionTable>> &actionTable,
-             RandomManager &randomManager) {
+ActionId SelectAction(const std::vector<Character *> &list, const Character *c,
+                      RandomManager &randomManager) {
     int actionNum = c->GetActionSelectNum();
     if (actionNum > 0) {
 
@@ -788,13 +789,11 @@ SelectAction(const std::vector<Character *> &list, const Character *c,
         }
         int randomProbability = randomManager.Get() % totalProbability;
 
-        int index = 0;
-        while (randomProbability > 0) {
-            randomProbability -= possible[index].GetProbability();
-            if (randomProbability <= 0) {
-                return possible[index].GetActionId();
+        for (const auto &r : possible) {
+            if (randomProbability < r.GetProbability()) {
+                return r.GetActionId();
             }
-            index++;
+            randomProbability -= r.GetProbability();
         }
 
         unsigned int actionIndex = randomManager.Get() % actionNum;
@@ -873,8 +872,7 @@ void CreateBattleLog(
             }
 
             // 行動を選択
-            ActionId actionId =
-                SelectAction(list, c, actionTable, randomManager);
+            ActionId actionId = SelectAction(list, c, randomManager);
 
             // 行動を実行
             ExecuteAction(log, list, c, actionId, actionTable, randomManager);
@@ -986,7 +984,7 @@ int main() {
                                  TargetSide::Enemy,    // 敵
                                  TargetSelect::Random, // ランダム
                                  TargetRange::One,     // 1体
-                                 50);
+                                 80);
     std::unique_ptr<ActionTable> actionTableAttackDouble =
         std::make_unique<ActionTable>();
     (*actionTableAttackDouble).AddAction(std::move(actionAttackDouble0));
@@ -1013,7 +1011,7 @@ int main() {
                                  TargetSide::Enemy,  // 敵
                                  std::nullopt,       // なし
                                  TargetRange::All,   // 全体
-                                 33);
+                                 60);
     std::unique_ptr<ActionTable> actionTableAttackMagicAll =
         std::make_unique<ActionTable>();
     (*actionTableAttackMagicAll).AddAction(std::move(actionAttackMagicAll));
@@ -1201,10 +1199,6 @@ int main() {
 
                             c->SetDamage(param);
 
-                            // unsigned int hp =
-                            //     c->GetParam(CharacterParam::Hp) - param;
-                            // c->SetParam(CharacterParam::Hp, hp);
-
                             DisplayCharacter(*c);
                             std::cout << "\n";
                             break;
@@ -1213,9 +1207,7 @@ int main() {
                         case LogType::Heal: {
                             std::cout << "    回復 " << param << " ";
                             auto &c = character[TargetCharacterIndex];
-                            unsigned int hp =
-                                c->GetParam(CharacterParam::Hp) + param;
-                            c->SetParam(CharacterParam::Hp, hp);
+                            c->HealHp(param);
                             DisplayCharacter(*c);
                             std::cout << "\n";
                             break;
