@@ -172,7 +172,7 @@ class Character {
 
     CharacterType GetType() const { return mType; }
 
-    void SetName(const std::string &name) { mName = std::move(name); }
+    void SetName(const std::string &name) { mName = name; }
     const std::string &GetName() const { return mName; }
 
     void SetTeamNo(int teamNo) { mTeamNo = teamNo; }
@@ -298,8 +298,8 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase,
             break;
         case CharacterType::Caster:
             (character.get())->SetAction(ActionId::MagicAttackOne, 60);
-            (character.get())->SetAction(ActionId::MagicAttackAll, 10);
-            (character.get())->SetAction(ActionId::HealOne, 10);
+            (character.get())->SetAction(ActionId::MagicAttackAll, 20);
+            (character.get())->SetAction(ActionId::HealOne, 20);
             break;
         case CharacterType::Healer:
             (character.get())->SetAction(ActionId::AttackOne, 10);
