@@ -47,7 +47,7 @@ class Action {
     TargetSide mTargetSide;
     std::optional<TargetSelect> mTargetSelect;
     TargetRange mTargetRange;
-    unsigned int mPercent;
+    unsigned int mPercent; // 効果の強さ
 
   public:
     Action(EffectType et, ParamType pt, TargetSide ts,
@@ -64,6 +64,8 @@ class Action {
         return mTargetSelect;
     }
     TargetRange GetTargetRange() const { return mTargetRange; }
+
+    unsigned int GetPercent() const { return mPercent; }
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -94,13 +96,14 @@ enum class ActionId {
 
 class CharacterAction {
   public:
-    CharacterAction(ActionId id, unsigned int per) : mId(id), mPercent(per) {}
-    unsigned int GetPercent() const { return mPercent; }
+    CharacterAction(ActionId id, unsigned int pro)
+        : mId(id), mProbability(pro) {}
+    unsigned int GetProbability() const { return mProbability; }
     ActionId GetActionId() const { return mId; }
 
   private:
     ActionId mId;
-    unsigned int mPercent;
+    unsigned int mProbability; // この行動を行う確率
 };
 
 enum class CharacterType {
@@ -136,7 +139,10 @@ class Character {
     int GetActionSelectNum() const { return mAction.size(); }
     // 指定のインデックスのアクションを選択する確率を取得
     unsigned int GetActionProbability(const unsigned int index) const {
-        return mAction[index].GetPercent();
+        return mAction[index].GetProbability();
+    }
+    ActionId GetActionId(unsigned int index) const {
+        return mAction[index].GetActionId();
     }
 
     // 現在HPを最大HPに
@@ -258,6 +264,7 @@ std::unique_ptr<Character> CreateCharacter(const unsigned int randomBase,
 
     (character.get())->SetRandomBase(randomBase);
 
+    // 把握しやすくするため名前をつける
     std::string names[] = {"りんご", "みかん", "ばなな",
                            "きうい", "なし　", "めろん"};
     (character.get())->SetName(names[index]);
@@ -383,19 +390,11 @@ unsigned int sumHpByTeam(const std::vector<Character *> &list,
 std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
                                      Character *actionCharacter, TargetSide ts,
                                      std::optional<TargetSelect> tsl,
-                                     TargetRange tr,
+                                     TargetRange tr, EffectType et,
                                      RandomManager &randomManager) {
     std::vector<unsigned int> target;
 
     if (ts == TargetSide::Enemy) {
-        // 敵
-
-        //
-        // std::cout << "事前チェック\n";
-        // for (const auto &c : list) {
-        //     DisplayCharacter(*c);
-        // }
-        // std::cout << "\n";
 
         // 生きている敵のリストを作る
         int listCount = 0;
@@ -404,15 +403,11 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
                 int hp = c->GetParam(CharacterParam::Hp);
                 int index = c->GetIndex();
                 if (hp > 0) {
-                    // std::cout << "Set Target " << index << "li " << listCount
-                    //           << " Hp " << hp << "\n";
                     target.push_back(listCount);
                 }
             }
             listCount++;
         }
-        // std::cout << "target 生存 " << target.size() << "\n";
-        // std::cout << "list 生存 " << list.size() << "\n";
 
         if (tr == TargetRange::All) {
             // 敵全体
@@ -452,11 +447,20 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
         // 味方
 
         // 生きている味方のリストを作る
+        int listCount = 0;
         for (const Character *c : list) {
             if (actionCharacter->GetTeamNo() == c->GetTeamNo()) {
                 if (c->GetParam(CharacterParam::Hp) > 0) {
-                    target.push_back(c->GetIndex());
+                    target.push_back(listCount);
                 }
+            }
+            listCount++;
+        }
+
+        for (const auto &ci : target) {
+            const Character *c = list[ci];
+            if (c->GetParam(CharacterParam::Hp) <= 0) {
+                std::cout << "?\n";
             }
         }
 
@@ -468,14 +472,19 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
             if (tsl == TargetSelect::LowestHp) {
                 // HPが低いものをターゲットとして選択
 
-                // 味方のリストをHPの低い順に並び替える
+                // 味方のリストを最大HPと現在HPの差が多い順に並び替える
                 std::sort(target.begin(), target.end(),
                           [list](const int a, const int b) {
-                              return list[a]->GetParam(CharacterParam::Hp) <
-                                     list[b]->GetParam(CharacterParam::Hp);
+                              int gapA =
+                                  list[a]->GetParam(CharacterParam::MaxHp) -
+                                  list[a]->GetParam(CharacterParam::Hp);
+                              int gapB =
+                                  list[b]->GetParam(CharacterParam::MaxHp) -
+                                  list[b]->GetParam(CharacterParam::Hp);
+                              return gapA > gapB;
                           });
                 // targetの先頭より後ろを削除
-                if (1 < target.size()) {
+                if (target.size() > 1) {
                     target.erase(target.begin() + 1, target.end());
                 }
 
@@ -494,19 +503,17 @@ std::vector<unsigned int> MakeTarget(std::vector<Character *> &list,
 // 行動を実行
 void ExecuteAction(std::vector<unsigned int> &log,
                    std::vector<Character *> &list, Character *c,
-                   unsigned int actionIndex,
+                   ActionId actionId,
                    const std::vector<std::unique_ptr<ActionTable>> &actionTable,
                    RandomManager &randomManager) {
 
-    auto *acttbl = actionTable[actionIndex].get();
+    auto *acttbl = actionTable[static_cast<unsigned int>(actionId)].get();
     const auto &act = acttbl->GetTable();
 
     std::cout << "    行動 " << c->GetName() << "[" << c->GetIndex() << "]"
-              << " HP " << c->GetParam(CharacterParam::Hp);
-    if (c->GetParam(CharacterParam::Hp) <= 0) {
-        std::cout << "?";
-    }
+              << " HP " << c->GetParam(CharacterParam::Hp) << "   ";
 
+    bool dispActionType = false;
     for (const std::unique_ptr<Action> &a : act) {
         // 攻撃か回復か
         EffectType et = a->GetEffectType();
@@ -517,9 +524,47 @@ void ExecuteAction(std::vector<unsigned int> &log,
         std::optional<TargetSelect> tsl = a->GetTargetSelect();
         TargetRange tr = a->GetTargetRange();
 
+        // 効果の強さ
+        unsigned int per = a->GetPercent();
+
+        if (!dispActionType) {
+            dispActionType = true;
+            if (et == EffectType::Attack) {
+                // 攻撃
+                if (tr == TargetRange::All) {
+                    if (pt == ParamType::Physical) {
+                        std::cout << "全体物理攻撃\n";
+                    } else {
+                        std::cout << "全体魔法攻撃\n";
+                    }
+                } else {
+                    if (act.size() > 1) {
+                        if (pt == ParamType::Physical) {
+                            std::cout << "連続物理攻撃\n";
+                        } else {
+                            std::cout << "連続魔法攻撃\n";
+                        }
+                    } else {
+                        if (pt == ParamType::Physical) {
+                            std::cout << "単体物理攻撃\n";
+                        } else {
+                            std::cout << "単体魔法攻撃\n";
+                        }
+                    }
+                }
+            } else {
+                // 回復
+                if (tr == TargetRange::All) {
+                    std::cout << "全体回復\n";
+                } else {
+                    std::cout << "単体回復\n";
+                }
+            }
+        }
+
         // 効果の対象のインデックスのテーブルを作る
         std::vector<unsigned int> targets =
-            MakeTarget(list, c, ts, tsl, tr, randomManager);
+            MakeTarget(list, c, ts, tsl, tr, et, randomManager);
 
         log.push_back(MakeLog(LogType::Action, c->GetIndex())); //
 
@@ -533,7 +578,8 @@ void ExecuteAction(std::vector<unsigned int> &log,
                 switch (pt) {
                     // 物理攻撃
                     case ParamType::Physical: {
-                        const int attack = c->GetParam(CharacterParam::Attack);
+                        int attack = c->GetParam(CharacterParam::Attack);
+                        attack = attack * per / 100; // 効果の強さを反映
 
                         for (auto index : targets) {
                             Character *targetCharacter = list[index];
@@ -553,7 +599,7 @@ void ExecuteAction(std::vector<unsigned int> &log,
                                 targetCharacter->GetParam(CharacterParam::Hp);
 
                             std::cout
-                                << "        物理攻撃 "
+                                << "        "
                                 << " ターゲット:" << targetCharacter->GetName()
                                 << "[" << targetCharacter->GetIndex() << "] "
                                 << "ダメージ " << damage << " Hp: " << baseHp
@@ -583,7 +629,8 @@ void ExecuteAction(std::vector<unsigned int> &log,
 
                     // 魔法攻撃
                     case ParamType::Magic: {
-                        const int attack = c->GetParam(CharacterParam::Magic);
+                        int attack = c->GetParam(CharacterParam::Magic);
+                        attack = attack * per / 100; // 効果の強さを反映
 
                         for (auto index : targets) {
                             Character *targetCharacter = list[index];
@@ -603,7 +650,7 @@ void ExecuteAction(std::vector<unsigned int> &log,
                                 targetCharacter->GetParam(CharacterParam::Hp);
 
                             std::cout
-                                << "        魔法攻撃 "
+                                << "        "
                                 << " ターゲット:" << targetCharacter->GetName()
                                 << "[" << targetCharacter->GetIndex() << "] "
                                 << "ダメージ " << damage << " Hp: " << baseHp
@@ -635,7 +682,10 @@ void ExecuteAction(std::vector<unsigned int> &log,
 
             // 回復
             case EffectType::Heal: {
-                const int heal = c->GetParam(CharacterParam::Magic);
+                int heal = c->GetParam(CharacterParam::Magic);
+
+                heal = heal * per / 100; // 効果の強さを反映
+
                 for (auto index : targets) {
                     Character *targetCharacter = list[index];
                     const int baseHp =
@@ -644,6 +694,14 @@ void ExecuteAction(std::vector<unsigned int> &log,
 
                     const int resultHp =
                         targetCharacter->GetParam(CharacterParam::Hp);
+
+                    std::cout << "        "
+                              << " ターゲット:" << targetCharacter->GetName()
+                              << "[" << targetCharacter->GetIndex() << "] "
+                              << "回復 " << heal << " Hp: " << baseHp << " -> "
+                              << resultHp;
+                    std::cout << "\n";
+
                     // ログに追加
                     log.push_back(MakeLog(LogType::Target,
                                           targetCharacter->GetIndex())); //
@@ -656,17 +714,93 @@ void ExecuteAction(std::vector<unsigned int> &log,
 }
 
 //--------------------------------------------------------------------------------------------------
+// ダメージを受けた味方がいるか？
+bool isExistFriendDamaged(const std::vector<Character *> &list,
+                          unsigned int teamNo) {
+    for (const auto c : list) {
+        if (c->GetTeamNo() == teamNo) {
+            if (c->GetParam(CharacterParam::MaxHp) >
+                c->GetParam(CharacterParam::Hp)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
 // 行動を選択
-unsigned int
+ActionId
 SelectAction(const std::vector<Character *> &list, const Character *c,
              const std::vector<std::unique_ptr<ActionTable>> &actionTable,
              RandomManager &randomManager) {
     int actionNum = c->GetActionSelectNum();
     if (actionNum > 0) {
-        unsigned int random = randomManager.Get() % actionNum;
-        return random;
+
+        // 実際に選択できる行動のリストを作る
+        std::vector<CharacterAction> possible;
+
+        for (int i = 0; i < actionNum; i++) {
+            ActionId id = c->GetActionId(i);
+
+            switch (id) {
+                case ActionId::AttackOne: {
+                    possible.emplace_back(id, c->GetActionProbability(i));
+                    break;
+                }
+
+                case ActionId::AttackDouble: {
+                    possible.emplace_back(id, c->GetActionProbability(i));
+                    break;
+                }
+
+                case ActionId::MagicAttackOne: {
+                    possible.emplace_back(id, c->GetActionProbability(i));
+                    break;
+                }
+
+                case ActionId::MagicAttackAll: {
+                    possible.emplace_back(id, c->GetActionProbability(i));
+                    break;
+                }
+
+                case ActionId::HealOne: {
+                    // hpが減っている味方がいるなら選択できる
+                    if (isExistFriendDamaged(list, c->GetTeamNo())) {
+                        possible.emplace_back(id, c->GetActionProbability(i));
+                    }
+                    break;
+                }
+
+                case ActionId::HealAll: {
+                    // hpが減っている味方がいるなら選択できる
+                    if (isExistFriendDamaged(list, c->GetTeamNo())) {
+                        possible.emplace_back(id, c->GetActionProbability(i));
+                    }
+                    break;
+                }
+            }
+        }
+
+        int totalProbability = 0;
+        for (const auto &a : possible) {
+            totalProbability += a.GetProbability();
+        }
+        int randomProbability = randomManager.Get() % totalProbability;
+
+        int index = 0;
+        while (randomProbability > 0) {
+            randomProbability -= possible[index].GetProbability();
+            if (randomProbability <= 0) {
+                return possible[index].GetActionId();
+            }
+            index++;
+        }
+
+        unsigned int actionIndex = randomManager.Get() % actionNum;
+        return c->GetActionId(actionIndex);
     }
-    return 0;
+    return ActionId::AttackOne;
 }
 //--------------------------------------------------------------------------------------------------
 // バトルログの生成
@@ -709,15 +843,16 @@ void CreateBattleLog(
         }
         std::cout << "\n";
 
+        if (turnNo >= MaxTurn) {
+            exit = true;
+            result = Result::TurnOverDraw;
+            break;
+        }
+
         // ターン開始前のキャラの状態
         for (const auto &c : character) {
             std::cout << "    ";
             DisplayCharacter(*c);
-        }
-
-        if (turnNo >= MaxTurn) {
-            exit = true;
-            result = Result::TurnOverDraw;
         }
 
         // キャラをシャッフル(速度が同じキャラが複数いた場合に、いつも同じ順番にならないよう)
@@ -738,12 +873,11 @@ void CreateBattleLog(
             }
 
             // 行動を選択
-            unsigned int actionIndex =
+            ActionId actionId =
                 SelectAction(list, c, actionTable, randomManager);
 
             // 行動を実行
-            ExecuteAction(log, list, c, actionIndex, actionTable,
-                          randomManager);
+            ExecuteAction(log, list, c, actionId, actionTable, randomManager);
 
             // もしどちらかのチームが全滅しているなら終了
             {
@@ -815,8 +949,6 @@ void CreateBattleLog(
 
     std::cout << "\n";
 }
-
-void TestFunc();
 
 //--------------------------------------------------------------------------------------------------
 int main() {
@@ -894,7 +1026,7 @@ int main() {
                                  TargetSide::Friend,     // 味方
                                  TargetSelect::LowestHp, // Hpが一番低い
                                  TargetRange::One,       // 1体
-                                 100);
+                                 30);
     std::unique_ptr<ActionTable> actionTableHeal =
         std::make_unique<ActionTable>();
     (*actionTableHeal).AddAction(std::move(actionHeal));
@@ -907,7 +1039,7 @@ int main() {
                                  TargetSide::Friend, // 味方
                                  std::nullopt,       // なし
                                  TargetRange::All,   // 全体
-                                 33);
+                                 10);
     std::unique_ptr<ActionTable> actionTableHealAll =
         std::make_unique<ActionTable>();
     (*actionTableHealAll).AddAction(std::move(actionHealAll));
